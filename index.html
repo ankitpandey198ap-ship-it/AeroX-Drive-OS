@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>AEROX OS v2.5.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --cyan:#7df3ff;--success:#4dffa0;--warn:#ffb84d;--destructive:#ff4d4d;
+    --grad-bg:radial-gradient(ellipse at 20% 40%,#1a0635 0%,#0a0518 40%,#000510 100%);
+    font-family:'Orbitron',monospace;
+  }
+  html,body{width:100%;height:100%;background:#000;overflow:hidden}
+  .cockpit{
+    position:fixed;inset:0;display:flex;flex-direction:column;
+    padding:6px;gap:6px;background:var(--grad-bg);overflow:hidden;color:#fff;
+  }
+  .glass{background:rgba(10,8,30,0.65);border:1px solid rgba(125,243,255,0.18);border-radius:10px;backdrop-filter:blur(12px)}
+  .glass-strong{background:rgba(8,6,22,0.82);border:1px solid rgba(125,243,255,0.22);border-radius:10px;backdrop-filter:blur(16px)}
+  .neon-text{color:var(--cyan);text-shadow:0 0 12px rgba(125,243,255,0.7)}
+  .boot-in{animation:bootIn 0.4s ease-out}
+  @keyframes bootIn{from{opacity:0;transform:scale(0.97)}to{opacity:1;transform:scale(1)}}
+  .pulse-glow{animation:pulseGlow 1.4s ease-in-out infinite}
+  @keyframes pulseGlow{0%,100%{opacity:0.5}50%{opacity:1}}
+  .flow-anim{animation:flowPulse 0.8s ease-in-out infinite alternate}
+  @keyframes flowPulse{from{opacity:0.4}to{opacity:1}}
+  .rotate-hint{display:none}
+  @media (orientation:portrait) and (max-width:600px){
+    .cockpit{display:none!important}
+    .rotate-hint{display:flex!important}
+  }
+  button{background:none;border:none;cursor:pointer;color:inherit;font-family:inherit}
+  button:focus-visible{outline:2px solid var(--cyan)}
+
+  /* Layout helpers */
+  #main-row{display:grid;gap:6px;min-height:0;flex:1 1 0;grid-template-columns:clamp(180px,24vw,320px) 1fr clamp(180px,24vw,320px)}
+  #bottom-row{display:grid;gap:6px;grid-template-columns:1fr 1.1fr 1fr}
+  #top-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;font-size:10px;letter-spacing:.25em;text-transform:uppercase}
+  #top-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:flex-end}
+  #steer-panel{display:flex;align-items:center;justify-content:center;padding:8px}
+  #speedo-panel{position:relative;overflow:hidden;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px}
+  #right-panel{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:8px;min-height:0}
+  #pedal-row{display:flex;align-items:center;justify-content:center;gap:12px;flex:1;min-height:0}
+  #gear-row{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:100%}
+  #power-mgmt{padding:8px;display:flex;flex-direction:column;gap:6px}
+  #pm-header{display:flex;align-items:center;justify-content:space-between}
+  #pm-modes{display:flex;gap:4px}
+  #pm-flow{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:4px;padding:0 4px;min-height:58px;position:relative}
+  #pm-arrows{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:space-between;padding:0 40px}
+  #pm-sources{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  #switch-notice{position:absolute;left:50%;transform:translateX(-50%);top:48px;z-index:40;padding:8px 16px;border-radius:8px;font-size:10px;letter-spacing:.25em;color:#7df3ff;box-shadow:0 0 30px rgba(125,243,255,0.45);display:none}
+  #bt-overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px)}
+  #bt-panel{max-width:460px;width:100%;padding:20px;position:relative}
+  #bt-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+
+  /* Boot screen */
+  #boot-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--grad-bg);z-index:100;text-align:center}
+  #boot-bar-wrap{margin-top:24px;width:224px;height:2px;border-radius:2px;background:rgba(255,255,255,0.1);overflow:hidden;margin-left:auto;margin-right:auto}
+  #boot-bar{height:100%;background:linear-gradient(90deg,#ff3d8a,#7d4dff,#3a7dff);width:100%}
+
+  /* Steering wheel */
+  #wheel-wrap{position:relative;user-select:none;touch-action:none;width:min(280px,38vh);height:min(280px,38vh)}
+  #wheel-svg{width:100%;height:100%;transition:transform 220ms ease-out;filter:drop-shadow(0 8px 18px rgba(0,0,0,0.55))}
+
+  /* Pedals */
+  .pedal-outer{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .pedal-track{position:relative;user-select:none;touch-action:none;cursor:pointer;width:82px;height:min(200px,28vh);perspective:500px}
+  .pedal-base{position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:96px;height:16px;border-radius:0 0 6px 6px;background:linear-gradient(180deg,#2a2840,#0a0820)}
+  .pedal-body{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;width:84px;border-radius:8px;overflow:hidden;transform-origin:bottom center;background:linear-gradient(180deg,#1c1838,#0c0c20);border:1px solid rgba(255,255,255,0.1)}
+  .pedal-fill{position:absolute;bottom:0;left:0;right:0;opacity:0.55}
+  .pedal-lines{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-evenly;padding:0 10px}
+  .pedal-line{height:1px;background:rgba(255,255,255,0.1)}
+  .pedal-label{position:absolute;top:12px;left:0;right:0;text-align:center;font-weight:bold;font-size:12px;letter-spacing:.3em}
+  .pedal-pct{font-family:monospace;font-size:12px}
+
+  /* Battery bars */
+  .bat-bar-wrap{position:relative;height:24px;border-radius:6px;overflow:hidden;margin-bottom:6px;background:#0a0820;border:1px solid rgba(255,255,255,0.1)}
+  .bat-bar{height:100%;position:relative;transition:width 250ms ease-out}
+  .bat-bar-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 6px;font-family:monospace;font-size:10px}
+  .bat-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:8px;letter-spacing:.1em;color:rgba(255,255,255,0.55)}
+  .bat-stat-val{font-family:monospace;color:rgba(255,255,255,0.9);font-size:10px}
+
+  /* BT signal bars */
+  .sig-bars{display:flex;align-items:flex-end;gap:2px;height:20px;margin-top:4px}
+  .sig-bar{width:6px;border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- BOOT SCREEN -->
+<div id="boot-screen">
+  <div>
+    <div style="font-family:Orbitron;font-weight:800;letter-spacing:.5em;font-size:36px;color:#7df3ff;text-shadow:0 0 30px rgba(125,243,255,0.8)">AEROX</div>
+    <div style="font-family:Orbitron;letter-spacing:.3em;font-size:10px;color:rgba(255,255,255,0.6);margin-top:8px">SMART DRIVE OS · INITIALIZING</div>
+    <div id="boot-bar-wrap"><div id="boot-bar" class="pulse-glow"></div></div>
+  </div>
+</div>
+
+<!-- ROTATE HINT -->
+<div class="rotate-hint" style="position:fixed;inset:0;z-index:50;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;gap:12px;background:var(--grad-bg)">
+  <div style="font-size:40px">📱</div>
+  <div style="font-family:Orbitron;letter-spacing:.3em;font-size:14px">ROTATE DEVICE</div>
+  <div style="font-size:12px;color:rgba(255,255,255,0.6);letter-spacing:.15em">AeroX requires landscape orientation</div>
+</div>
+
+<!-- MAIN COCKPIT -->
+<div class="cockpit boot-in" id="cockpit" style="display:none;flex-direction:column">
+
+  <!-- TOP BAR -->
+  <div class="glass" id="top-bar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="neon-text" style="font-weight:bold">AEROX OS</span>
+      <span style="color:rgba(255,255,255,0.5)">v2.5.0</span>
+    </div>
+    <div id="top-right">
+      <span style="display:flex;align-items:center;gap:6px">🕐 <span id="clock-display">--:--</span></span>
+      <span style="display:flex;align-items:center;gap:6px;color:#7df3ff">📍 GPS</span>
+      <button id="bt-btn" onclick="openBt()" style="display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:rgba(255,255,255,0.55)">🔵 TAP TO PAIR</button>
+      <span style="display:flex;align-items:center;gap:6px">⚡ <span id="status-display">PARKED</span></span>
+    </div>
+  </div>
+
+  <!-- SWITCH NOTICE -->
+  <div class="glass-strong" id="switch-notice">⚡ <span id="switch-text"></span></div>
+
+  <!-- MAIN ROW -->
+  <div id="main-row">
+    <!-- LEFT: Steering -->
+    <div class="glass-strong" id="steer-panel">
+      <div id="wheel-wrap">
+        <svg id="wheel-svg" viewBox="0 0 220 220">
+          <defs>
+            <radialGradient id="rim-grad" cx="50%" cy="50%" r="55%">
+              <stop offset="78%" stop-color="#3a3d44"/>
+              <stop offset="92%" stop-color="#1c1e22"/>
+              <stop offset="100%" stop-color="#0c0d10"/>
+            </radialGradient>
+            <linearGradient id="rim-hl" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#9aa0aa" stop-opacity="0.55"/>
+              <stop offset="50%" stop-color="#2a2c32" stop-opacity="0"/>
+              <stop offset="100%" stop-color="#000" stop-opacity="0.6"/>
+            </linearGradient>
+            <radialGradient id="hub-grad" cx="50%" cy="40%" r="60%">
+              <stop offset="0%" stop-color="#454850"/>
+              <stop offset="60%" stop-color="#22252b"/>
+              <stop offset="100%" stop-color="#0c0d10"/>
+            </radialGradient>
+            <linearGradient id="spoke-g" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#4a4d55"/>
+              <stop offset="50%" stop-color="#2a2d33"/>
+              <stop offset="100%" stop-color="#15171b"/>
+            </linearGradient>
+          </defs>
+          <circle cx="110" cy="110" r="100" fill="none" stroke="url(#rim-grad)" stroke-width="22"/>
+          <circle cx="110" cy="110" r="100" fill="none" stroke="url(#rim-hl)" stroke-width="22"/>
+          <circle cx="110" cy="110" r="92" fill="none" stroke="#c0392b" stroke-width="0.6" stroke-dasharray="2 4" opacity="0.7"/>
+          <rect x="103" y="108" width="14" height="62" rx="3" fill="url(#spoke-g)"/>
+          <g transform="rotate(-28 110 110)"><rect x="48" y="104" width="62" height="12" rx="3" fill="url(#spoke-g)"/></g>
+          <g transform="rotate(28 110 110)"><rect x="110" y="104" width="62" height="12" rx="3" fill="url(#spoke-g)"/></g>
+          <circle cx="110" cy="110" r="40" fill="url(#hub-grad)" stroke="#5a5d65" stroke-width="1"/>
+          <circle cx="110" cy="110" r="32" fill="none" stroke="#2a2c32" stroke-width="1"/>
+          <rect x="86" y="100" width="48" height="22" rx="4" fill="#0e0f12" stroke="#5a5d65" stroke-width="0.7"/>
+          <text x="110" y="115" text-anchor="middle" font-size="11" font-weight="800" fill="#cfd2d8" font-family="Orbitron" letter-spacing="2">AERO</text>
+          <rect x="107" y="8" width="6" height="14" rx="1.5" fill="#e74c3c"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- CENTER: Speedometer -->
+    <div class="glass-strong" id="speedo-panel">
+      <svg id="speedo-svg" viewBox="0 0 800 520" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%">
+        <defs>
+          <linearGradient id="hud-bg" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#1a0b2e"/>
+            <stop offset="50%" stop-color="#2a1248"/>
+            <stop offset="100%" stop-color="#1a0b3a"/>
+          </linearGradient>
+          <linearGradient id="zone-red" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#ff2d2d"/>
+            <stop offset="100%" stop-color="#ff8a3d"/>
+          </linearGradient>
+          <linearGradient id="zone-blue" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#3a7dff"/>
+            <stop offset="100%" stop-color="#7d4dff"/>
+          </linearGradient>
+          <radialGradient id="core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#0a1a3a"/>
+            <stop offset="70%" stop-color="#050814"/>
+            <stop offset="100%" stop-color="#000"/>
+          </radialGradient>
+          <filter id="glow-f" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <pattern id="carbon" width="6" height="6" patternUnits="userSpaceOnUse">
+            <rect width="6" height="6" fill="#1a1238"/>
+            <circle cx="2" cy="2" r="0.8" fill="#2a1a55"/>
+            <circle cx="5" cy="5" r="0.8" fill="#2a1a55"/>
+          </pattern>
+        </defs>
+        <!-- Static background and arcs built in JS -->
+        <rect x="0" y="0" width="800" height="520" fill="url(#hud-bg)" rx="18"/>
+        <g id="speedo-dots"></g>
+        <g id="speedo-arcs"></g>
+        <g id="speedo-ticks"></g>
+        <g id="speedo-core"></g>
+        <g id="speedo-needle" style="transform-origin:400px 405.6px"></g>
+        <g id="speedo-labels"></g>
+        <g id="speedo-footer"></g>
+      </svg>
+    </div>
+
+    <!-- RIGHT: Pedals + Gears -->
+    <div class="glass-strong" id="right-panel">
+      <div id="pedal-row">
+        <!-- BRK Pedal -->
+        <div class="pedal-outer">
+          <div class="pedal-track" id="brk-track">
+            <div class="pedal-base"></div>
+            <div class="pedal-body" id="brk-body" style="height:calc(100% - 16px);box-shadow:inset 0 0 14px rgba(0,0,0,0.6),0 0 8px #ff6060">
+              <div class="pedal-fill" id="brk-fill" style="height:0%;background:linear-gradient(0deg,#ff6060,#6090ff)"></div>
+              <div class="pedal-lines" id="brk-lines"></div>
+              <div class="pedal-label" style="color:#ff6060">BRK</div>
+            </div>
+          </div>
+          <div class="pedal-pct" id="brk-pct" style="color:#ff6060">0%</div>
+        </div>
+        <!-- ACC Pedal -->
+        <div class="pedal-outer">
+          <div class="pedal-track" id="acc-track">
+            <div class="pedal-base"></div>
+            <div class="pedal-body" id="acc-body" style="height:calc(100% - 16px);box-shadow:inset 0 0 14px rgba(0,0,0,0.6),0 0 8px #7df3ff">
+              <div class="pedal-fill" id="acc-fill" style="height:0%;background:linear-gradient(0deg,#7df3ff,#6090ff)"></div>
+              <div class="pedal-lines" id="acc-lines"></div>
+              <div class="pedal-label" style="color:#7df3ff">ACC</div>
+            </div>
+          </div>
+          <div class="pedal-pct" id="acc-pct" style="color:#7df3ff">0%</div>
+        </div>
+      </div>
+      <!-- Gear buttons -->
+      <div id="gear-row">
+        <button class="gear-btn" data-gear="P" onclick="setGear('P')">P</button>
+        <button class="gear-btn" data-gear="R" onclick="setGear('R')">R</button>
+        <button class="gear-btn" data-gear="N" onclick="setGear('N')">N</button>
+        <button class="gear-btn" data-gear="D" onclick="setGear('D')">D</button>
+      </div>
+    </div>
+  </div><!-- /main-row -->
+
+  <!-- BOTTOM ROW -->
+  <div id="bottom-row">
+    <!-- Battery A -->
+    <div class="glass" id="batA-cell" style="padding:8px;position:relative;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7df3ff" stroke-width="2" id="batA-icon"><rect x="2" y="7" width="16" height="11" rx="2"/><path d="M22 11v3"/></svg>
+          <span style="font-size:10px;letter-spacing:.3em;font-weight:bold">BATTERY A</span>
+        </div>
+        <span id="batA-state" style="font-size:8px;letter-spacing:.15em;font-family:monospace;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.55)">STANDBY</span>
+      </div>
+      <div class="bat-bar-wrap">
+        <div class="bat-bar" id="batA-bar" style="width:82%;background:linear-gradient(90deg,#7df3ff,#5060ff);box-shadow:0 0 12px #7df3ff"></div>
+        <div class="bat-bar-overlay"><span id="batA-pct" style="font-weight:bold">82%</span><span id="batA-chg" style="display:none;color:#4dffa0">⚡0W</span></div>
+      </div>
+      <div class="bat-stats">
+        <div><div style="opacity:.6">VOLT</div><div class="bat-stat-val" id="batA-volt">48.2V</div></div>
+        <div><div style="opacity:.6">♥ SOH</div><div class="bat-stat-val">98%</div></div>
+        <div><div style="opacity:.6">SRC</div><div class="bat-stat-val" id="batA-src">—</div></div>
+      </div>
+    </div>
+
+    <!-- Power Management -->
+    <div class="glass" id="power-mgmt">
+      <div id="pm-header">
+        <div style="font-size:9px;letter-spacing:.3em;color:rgba(255,255,255,0.55)">⚙ POWER MGMT</div>
+        <div id="pm-modes">
+          <button class="pm-mode-btn" data-mode="A" onclick="setBatMode('A')" style="padding:2px 8px;border-radius:4px;font-size:9px;letter-spacing:.1em;font-weight:bold;background:rgba(10,10,30,0.6);color:rgba(255,255,255,0.55);border:1px solid rgba(125,77,255,0.22);cursor:pointer">USE A</button>
+          <button class="pm-mode-btn" data-mode="AUTO" onclick="setBatMode('AUTO')" style="padding:2px 8px;border-radius:4px;font-size:9px;letter-spacing:.1em;font-weight:bold;background:linear-gradient(160deg,#7d4dff,#3a7dff);color:#fff;border:1px solid #7d4dff;box-shadow:0 0 10px rgba(125,77,255,0.55);cursor:pointer">AUTO</button>
+          <button class="pm-mode-btn" data-mode="B" onclick="setBatMode('B')" style="padding:2px 8px;border-radius:4px;font-size:9px;letter-spacing:.1em;font-weight:bold;background:rgba(10,10,30,0.6);color:rgba(255,255,255,0.55);border:1px solid rgba(125,77,255,0.22);cursor:pointer">USE B</button>
+        </div>
+      </div>
+      <div id="pm-flow">
+        <div style="text-align:center">
+          <div id="pm-batA-label" style="font-size:9px;font-weight:bold;letter-spacing:.15em;color:#7df3ff">BAT A</div>
+          <div id="pm-batA-pct" style="font-size:8px;color:rgba(255,255,255,0.5)">82%</div>
+        </div>
+        <div style="text-align:center">
+          <div style="margin:0 auto;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,rgba(125,243,255,0.25),transparent 70%);border:1px solid rgba(125,243,255,0.5)">⚡</div>
+          <div style="font-size:8px;letter-spacing:.1em;color:rgba(255,255,255,0.6);margin-top:2px">VEHICLE</div>
+        </div>
+        <div style="text-align:center">
+          <div id="pm-batB-label" style="font-size:9px;font-weight:bold;letter-spacing:.15em;color:rgba(255,255,255,0.4)">BAT B</div>
+          <div id="pm-batB-pct" style="font-size:8px;color:rgba(255,255,255,0.5)">65%</div>
+        </div>
+        <div id="pm-arrows">
+          <div id="pm-arrow-left"></div>
+          <div id="pm-arrow-right"></div>
+        </div>
+      </div>
+      <div id="pm-sources">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:4px;background:rgba(10,10,30,0.5);border:1px solid rgba(255,255,255,0.1)">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span id="solar-icon" style="color:rgba(255,255,255,0.3)">☀</span>
+            <span style="font-size:9px;letter-spacing:.15em;color:rgba(255,255,255,0.7)">SOLAR</span>
+          </div>
+          <span id="solar-val" style="font-family:monospace;font-size:10px;color:rgba(255,255,255,0.4)">NO</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:4px;background:rgba(10,10,30,0.5);border:1px solid rgba(255,255,255,0.1)">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span id="wind-icon" style="color:rgba(255,255,255,0.3)">💨</span>
+            <span style="font-size:9px;letter-spacing:.15em;color:rgba(255,255,255,0.7)">WIND</span>
+             </div>
+          <span id="wind-val" style="font-family:monospace;font-size:10px;color:rgba(255,255,255,0.4)">NO</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Battery B -->
+    <div class="glass" id="batB-cell" style="padding:8px;position:relative;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7df3ff" stroke-width="2" id="batB-icon"><rect x="2" y="7" width="16" height="11" rx="2"/><path d="M22 11v3"/></svg>
+          <span style="font-size:10px;letter-spacing:.3em;font-weight:bold">BATTERY B</span>
+        </div>
+        <span id="batB-state" style="font-size:8px;letter-spacing:.15em;font-family:monospace;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.55)">STANDBY</span>
+      </div>
+      <div class="bat-bar-wrap">
+        <div class="bat-bar" id="batB-bar" style="width:65%;background:linear-gradient(90deg,#7df3ff,#5060ff);box-shadow:0 0 12px #7df3ff"></div>
+        <div class="bat-bar-overlay"><span id="batB-pct" style="font-weight:bold">65%</span><span id="batB-chg" style="display:none;color:#4dffa0">⚡0W</span></div>
+      </div>
+      <div class="bat-stats">
+        <div><div style="opacity:.6">VOLT</div><div class="bat-stat-val" id="batB-volt">47.6V</div></div>
+        <div><div style="opacity:.6">♥ SOH</div><div class="bat-stat-val">96%</div></div>
+        <div><div style="opacity:.6">SRC</div><div class="bat-stat-val" id="batB-src">—</div></div>
+      </div>
+    </div>
+  </div><!-- /bottom-row -->
+</div><!-- /cockpit -->
+
+<!-- BLUETOOTH OVERLAY -->
+<div id="bt-overlay" onclick="closeBt()">
+  <div class="glass-strong" id="bt-panel" onclick="event.stopPropagation()">
+    <button onclick="closeBt()" style="position:absolute;top:12px;right:12px;padding:4px;border-radius:4px;color:rgba(255,255,255,0.55)">✕</button>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="padding:8px;border-radius:8px;background:rgba(125,243,255,0.15)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7df3ff" stroke-width="2"><path d="m6.5 6.5 11 11L12 23V1l5.5 5.5-11 11"/></svg>
+      </div>
+      <div>
+        <div style="font-weight:bold;letter-spacing:.15em;font-size:14px">BLUETOOTH · ANDROID</div>
+        <div id="bt-sub" style="font-size:10px;letter-spacing:.15em;color:rgba(255,255,255,0.55)">Disconnected · MODE: APK REQUIRED</div>
+      </div>
+    </div>
+    <div id="bt-stats">
+      <div class="glass" style="padding:8px">
+        <div style="font-size:9px;letter-spacing:.15em;color:rgba(255,255,255,0.55)">SIGNAL</div>
+        <div class="sig-bars" id="bt-signal-bars">
+          <div class="sig-bar" style="height:25%;background:rgba(255,255,255,0.08)"></div>
+          <div class="sig-bar" style="height:50%;background:rgba(255,255,255,0.08)"></div>
+          <div class="sig-bar" style="height:75%;background:rgba(255,255,255,0.08)"></div>
+          <div class="sig-bar" style="height:100%;background:rgba(255,255,255,0.08)"></div>
+          <span id="bt-sig-pct" style="font-family:monospace;font-size:10px;margin-left:4px;color:#7df3ff">60%</span>
+        </div>
+      </div>
+      <div class="glass" style="padding:8px">
+        <div style="font-size:9px;letter-spacing:.15em;color:rgba(255,255,255,0.55)">LATENCY</div>
+        <div style="font-family:monospace;font-size:16px;color:#7df3ff;margin-top:4px"><span id="bt-lat">38</span><span style="font-size:9px;color:rgba(255,255,255,0.55);margin-left:2px">ms</span></div>
+      </div>
+      <div class="glass" style="padding:8px">
+        <div style="font-size:9px;letter-spacing:.15em;color:rgba(255,255,255,0.55)">AUTO-RECONNECT</div>
+        <div style="font-family:monospace;font-size:16px;color:#4dffa0;margin-top:4px">ON</div>
+      </div>
+    </div>
+    <div class="glass" style="padding:10px;margin-bottom:12px;display:flex;gap:8px;font-size:11px;color:rgba(255,255,255,0.55)">
+      <span style="color:#7df3ff;flex-shrink:0">🛡</span>
+      <span>AeroX uses Android native Bluetooth (HC-05 / Classic). Install the AeroX Android app — the browser cannot access device Bluetooth directly.</span>
+    </div>
+    <div style="font-size:11px;color:#ffb84d;padding:10px;background:rgba(255,184,77,0.1);border-radius:6px;border:1px solid rgba(255,184,77,0.3)">
+      ⚠ Bluetooth Classic (HC-05 / SPP) is only available in the AeroX Android app build.
+    </div>
+    <div style="margin-top:16px;text-align:center">
+      <button id="bt-connect-btn" onclick="btConnect()" style="padding:8px 24px;border-radius:6px;font-family:Orbitron;font-size:11px;letter-spacing:.2em;font-weight:bold;background:linear-gradient(160deg,#7d4dff,#3a7dff);color:#fff;border:1px solid #7d4dff;box-shadow:0 0 14px rgba(125,77,255,0.55);cursor:pointer">SIMULATE CONNECT</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───
+const tel = {
+  speed:0, heading:0,
+  batA:82, batB:65,
+  voltA:48.2, voltB:47.6,
+  healthA:98, healthB:96,
+  active:'A',
+  solar:false, solarW:0, wind:false, windW:0,
+  range:312, motor:0, distance:0, driveMinutes:0, gps:'CONNECTED'
+};
+let gear = 'P';
+let steer = 0;
+let throttle = 0;
+let brake = 0;
+let btStatus = 'disconnected';
+let latency = 38;
+let signal = 60;
+let batMode = 'AUTO';
+let switchNoticeTmr = null;
+
+// ─── HELPERS ───
+function fmtTime(d){ return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}); }
+function polar(deg,rad,cx,cy){
+  const a = ((deg-180)*Math.PI)/180;
+  return [cx - rad*Math.cos(a), cy - rad*Math.sin(a)];
+}
+function arcPath(from,to,rad,cx,cy){
+  const [x1,y1]=polar(from,rad,cx,cy);
+  const [x2,y2]=polar(to,rad,cx,cy);
+  const large=to-from>180?1:0;
+  return `M ${x1} ${y1} A ${rad} ${rad} 0 ${large} 1 ${x2} ${y2}`;
+}
+function svgEl(tag,attrs){
+  const el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const[k,v] of Object.entries(attrs)) el.setAttribute(k,v);
+  return el;
+}
+
+// ─── BUILD SPEEDOMETER (static parts) ───
+(function buildSpeedo(){
+  const W=800,H=520,cx=400,cy=H*0.78,r=260;
+  const sa=180,ea=360,sweep=180;
+
+  // red dots
+  const dots=document.getElementById('speedo-dots');
+  for(let i=0;i<9;i++){
+    const c=svgEl('circle',{cx:W/2-200+i*50,cy:32,r:10,fill:'#ff2730',opacity:0.85,style:'filter:drop-shadow(0 0 8px #ff2730)'});
+    dots.appendChild(c);
+  }
+
+  // arcs
+  const arcs=document.getElementById('speedo-arcs');
+  const p1=svgEl('path',{d:arcPath(sa,ea,r+28,cx,cy),stroke:'url(#carbon)','stroke-width':56,fill:'none','stroke-linecap':'butt'}); arcs.appendChild(p1);
+  const p2=svgEl('path',{d:arcPath(sa,ea,r+28,cx,cy),stroke:'#ffffff','stroke-opacity':0.08,'stroke-width':2,fill:'none'}); arcs.appendChild(p2);
+  const p3=svgEl('path',{d:arcPath(sa,sa+sweep*(2/8),r,cx,cy),stroke:'url(#zone-red)','stroke-width':22,fill:'none','stroke-linecap':'butt',filter:'url(#glow-f)'}); arcs.appendChild(p3);
+  const p4=svgEl('path',{d:arcPath(sa+sweep*(2/8),ea,r,cx,cy),stroke:'url(#zone-blue)','stroke-width':22,fill:'none','stroke-linecap':'butt',opacity:0.75}); arcs.appendChild(p4);
+  const p5=svgEl('path',{d:arcPath(sa,ea,r-36,cx,cy),stroke:'#000','stroke-opacity':0.6,'stroke-width':2,fill:'none'}); arcs.appendChild(p5);
+
+  // ticks
+  const tg=document.getElementById('speedo-ticks');
+  for(let i=0;i<=40;i++){
+    if(i%5===0) continue;
+    const t=i/40, a=sa+sweep*t;
+    const [x1,y1]=polar(a,r-6,cx,cy);
+    const [x2,y2]=polar(a,r-16,cx,cy);
+    tg.appendChild(svgEl('line',{x1,y1,x2,y2,stroke:'#ffffff','stroke-opacity':0.45,'stroke-width':1.5}));
+  }
+  for(let i=0;i<=8;i++){
+    const t=i/8, a=sa+sweep*t;
+    const [x1,y1]=polar(a,r-6,cx,cy);
+    const [x2,y2]=polar(a,r-26,cx,cy);
+    const [lx,ly]=polar(a,r-48,cx,cy);
+    tg.appendChild(svgEl('line',{x1,y1,x2,y2,stroke:'#ffffff','stroke-opacity':0.95,'stroke-width':3}));
+    const txt=svgEl('text',{'x':lx,'y':ly+6,'text-anchor':'middle','font-size':28,'font-weight':700,fill:'#ffffff','font-family':'Orbitron'});
+    txt.textContent=i; tg.appendChild(txt);
+  }
+
+  // core
+  const cg=document.getElementById('speedo-core');
+  cg.appendChild(svgEl('circle',{cx,cy,r:r-64,fill:'url(#core)'}));
+  cg.appendChild(svgEl('circle',{cx,cy,r:r-64,fill:'none',stroke:'#3a7dff','stroke-opacity':0.6,'stroke-width':2}));
+  cg.appendChild(svgEl('circle',{cx,cy,r:r-80,fill:'none',stroke:'#ffffff','stroke-opacity':0.08,'stroke-width':1}));
+
+  // needle (built dynamically in update)
+  const ng=document.getElementById('speedo-needle');
+  const poly=svgEl('polygon',{points:`${cx-6},${cy} ${cx+6},${cy} ${cx+2},${cy-r+10} ${cx-2},${cy-r+10}`,fill:'#ffd54a',style:'filter:drop-shadow(0 0 8px #ffb300)'});
+  ng.appendChild(poly);
+  ng.appendChild(svgEl('circle',{cx,cy,r:14,fill:'#0a0a14',stroke:'#ffd54a','stroke-width':2}));
+
+  // labels
+  const lg=document.getElementById('speedo-labels');
+  const kmh=svgEl('text',{'x':cx,'y':cy-70,'text-anchor':'middle','font-size':20,fill:'#9fb8ff','font-family':'Orbitron','letter-spacing':2}); kmh.textContent='Km/h'; lg.appendChild(kmh);
+  const spd=svgEl('text',{'x':cx,'y':cy-8,'text-anchor':'middle','font-size':120,'font-weight':800,fill:'#ffffff','font-family':'Orbitron','id':'speedo-speed-text',style:'filter:drop-shadow(0 0 12px rgba(120,160,255,0.6))'}); spd.textContent='0'; lg.appendChild(spd);
+
+  // footer
+  const fg=document.getElementById('speedo-footer');
+  fg.appendChild(svgEl('rect',{x:40,y:H-70,width:W-80,height:58,rx:6,fill:'#0a1740',stroke:'#3a7dff','stroke-opacity':0.4}));
+  fg.appendChild(svgEl('line',{x1:W/3,y1:H-70,x2:W/3,y2:H-12,stroke:'#3a7dff','stroke-opacity':0.35}));
+  fg.appendChild(svgEl('line',{x1:(W/3)*2,y1:H-70,x2:(W/3)*2,y2:H-12,stroke:'#3a7dff','stroke-opacity':0.35}));
+  ['DIS','CLOCK','MIN'].forEach((lbl,i)=>{
+    const xp=[W/6,W/2,(W/6)*5][i];
+    const t=svgEl('text',{x:xp,y:H-48,'text-anchor':'middle','font-size':14,fill:'#7da3ff','font-family':'Orbitron','letter-spacing':3}); t.textContent=lbl; fg.appendChild(t);
+  });
+  const distT=svgEl('text',{x:W/6,y:H-22,'text-anchor':'middle','font-size':26,'font-weight':700,fill:'#ffffff','font-family':'Orbitron',id:'speedo-dist'}); distT.textContent='0.0'; fg.appendChild(distT);
+  const clockT=svgEl('text',{x:W/2,y:H-22,'text-anchor':'middle','font-size':26,'font-weight':700,fill:'#ffffff','font-family':'Orbitron',id:'speedo-clock'}); clockT.textContent='--:--'; fg.appendChild(clockT);
+  const minT=svgEl('text',{x:(W/6)*5,y:H-22,'text-anchor':'middle','font-size':26,'font-weight':700,fill:'#ffffff','font-family':'Orbitron',id:'speedo-min'}); minT.textContent='0:00'; fg.appendChild(minT);
+})();
+
+// ─── PEDAL LINES ───
+['brk-lines','acc-lines'].forEach(id=>{
+  const el=document.getElementById(id);
+  for(let i=0;i<9;i++){
+    const d=document.createElement('div');
+    d.className='pedal-line';
+    el.appendChild(d);
+  }
+});
+
+// ─── GEAR BUTTONS STYLE ───
+function updateGearBtns(){
+  document.querySelectorAll('.gear-btn').forEach(btn=>{
+    const g=btn.dataset.gear;
+    const active=g===gear;
+    btn.style.cssText=`height:28px;border-radius:6px;font-family:Orbitron;font-weight:bold;font-size:12px;cursor:pointer;${
+      active?'background:linear-gradient(160deg,#7d4dff,#3a7dff);color:#fff;border:1px solid #7d4dff;box-shadow:0 0 14px rgba(125,77,255,0.55)':
+              'background:rgba(10,10,30,0.6);color:rgba(255,255,255,0.5);border:1px solid rgba(125,77,255,0.25)'
+    }`;
+  });
+}
+
+function setGear(g){ gear=g; updateGearBtns(); }
+function setBatMode(m){
+  batMode=m;
+  document.querySelectorAll('.pm-mode-btn').forEach(btn=>{
+    const active=btn.dataset.mode===m;
+    btn.style.cssText=`padding:2px 8px;border-radius:4px;font-size:9px;letter-spacing:.1em;font-weight:bold;cursor:pointer;${
+      active?'background:linear-gradient(160deg,#7d4dff,#3a7dff);color:#fff;border:1px solid #7d4dff;box-shadow:0 0 10px rgba(125,77,255,0.55)':
+             'background:rgba(10,10,30,0.6);color:rgba(255,255,255,0.55);border:1px solid rgba(125,77,255,0.22)'
+    }`;
+  });
+}
+
+// ─── PEDAL INTERACTION ───
+function setupPedal(trackId, onValue, onRelease){
+  const el=document.getElementById(trackId);
+  let pressing=false;
+  function upd(clientY){
+    const rect=el.getBoundingClientRect();
+    const rel=(clientY-rect.top)/rect.height;
+    const v=Math.max(0,Math.min(100,rel*130));
+    onValue(Math.round(v));
+  }
+  el.addEventListener('pointerdown',e=>{
+    el.setPointerCapture(e.pointerId);
+    pressing=true; upd(e.clientY);
+  });
+  el.addEventListener('pointermove',e=>{ if(pressing) upd(e.clientY); });
+  el.addEventListener('pointerup',e=>{ try{el.releasePointerCapture(e.pointerId);}catch{} pressing=false; onRelease(); });
+  el.addEventListener('pointercancel',e=>{ pressing=false; onRelease(); });
+}
+
+function setPedal(id, val, color){
+  const body=document.getElementById(id+'-body');
+  const fill=document.getElementById(id+'-fill');
+  const pct=document.getElementById(id+'-pct');
+  const tilt=(val/100)*18;
+  body.style.transform=`translateX(-50%) rotateX(${tilt}deg)`;
+  body.style.boxShadow=`inset 0 0 14px rgba(0,0,0,0.6),0 0 ${val>0?24:8}px ${color}`;
+  fill.style.height=val+'%';
+  pct.textContent=val+'%';
+}
+
+setupPedal('brk-track', v=>{ brake=v; setPedal('brk',v,'#ff6060'); }, ()=>{ brake=0; setPedal('brk',0,'#ff6060'); });
+setupPedal('acc-track', v=>{ throttle=v; setPedal('acc',v,'#7df3ff'); }, ()=>{ throttle=0; setPedal('acc',0,'#7df3ff'); });
+
+// ─── STEERING WHEEL ───
+(function(){
+  const wrap=document.getElementById('wheel-wrap');
+  const svg=document.getElementById('wheel-svg');
+  let dragging=false, startPointerAngle=0, startWheelAngle=0;
+  let centerTimer=null;
+
+  function getAngle(cx2,cy2){
+    const rect=wrap.getBoundingClientRect();
+    const ox=rect.left+rect.width/2, oy=rect.top+rect.height/2;
+    return (Math.atan2(cy2-oy,cx2-ox)*180)/Math.PI;
+  }
+  wrap.addEventListener('pointerdown',e=>{
+    wrap.setPointerCapture(e.pointerId);
+    dragging=true;
+    startPointerAngle=getAngle(e.clientX,e.clientY);
+    startWheelAngle=steer;
+    svg.style.transition='none';
+    if(centerTimer){ clearInterval(centerTimer); centerTimer=null; }
+  });
+  wrap.addEventListener('pointermove',e=>{
+    if(!dragging) return;
+    let delta=getAngle(e.clientX,e.clientY)-startPointerAngle;
+    if(delta>180) delta-=360;
+    if(delta<-180) delta+=360;
+    steer=Math.max(-450,Math.min(450,startWheelAngle+delta*1.8));
+    svg.style.transform=`rotate(${steer}deg)`;
+  });
+  wrap.addEventListener('pointerup',e=>{
+    try{wrap.releasePointerCapture(e.pointerId);}catch{}
+    dragging=false;
+    svg.style.transition='transform 220ms ease-out';
+    startCentering();
+  });
+  wrap.addEventListener('pointercancel',()=>{ dragging=false; svg.style.transition='transform 220ms ease-out'; startCentering(); });
+
+  function startCentering(){
+    centerTimer=setInterval(()=>{
+      if(Math.abs(steer)<0.4){ steer=0; svg.style.transform='rotate(0deg)'; clearInterval(centerTimer); centerTimer=null; return; }
+      steer*=0.78;
+      svg.style.transform=`rotate(${steer}deg)`;
+    },40);
+  }
+})();
+
+// ─── BLUETOOTH ───
+function openBt(){
+  updateBtPanel();
+  document.getElementById('bt-overlay').style.display='flex';
+}
+function closeBt(){ document.getElementById('bt-overlay').style.display='none'; }
+function btConnect(){
+  if(btStatus==='connected'){ btStatus='disconnected'; }
+  else { btStatus='connecting'; setTimeout(()=>{ btStatus='connected'; updateBtBtn(); updateBtPanel(); },1200); }
+  updateBtBtn(); closeBt();
+}
+function updateBtBtn(){
+  const btn=document.getElementById('bt-btn');
+  btn.style.color=btStatus==='connected'?'#7df3ff':'rgba(255,255,255,0.55)';
+  btn.textContent=btStatus==='connected'?'🔵 VEHICLE LINKED':btStatus==='connecting'?'🔵 LINKING…':'🔵 TAP TO PAIR';
+}
+function updateBtPanel(){
+  document.getElementById('bt-sub').textContent=(btStatus==='connected'?'Vehicle Connected':btStatus==='connecting'?'Connecting…':'Disconnected')+' · MODE: APK REQUIRED';
+  document.getElementById('bt-connect-btn').textContent=btStatus==='connecting'?'LINKING…':btStatus==='connected'?'DISCONNECT':'SIMULATE CONNECT';
+  const bars=Math.ceil(signal/25);
+  const barEls=document.querySelectorAll('#bt-signal-bars .sig-bar');
+  barEls.forEach((b,i)=>{
+    b.style.background=i<bars?'#7df3ff':'rgba(255,255,255,0.08)';
+    b.style.boxShadow=i<bars?'0 0 6px #7df3ff':'none';
+  });
+  document.getElementById('bt-sig-pct').textContent=Math.round(signal)+'%';
+  document.getElementById('bt-lat').textContent=Math.round(latency);
+}
+  // ─── SWITCH NOTICE ───
+function showSwitch(text){
+  const el=document.getElementById('switch-notice');
+  document.getElementById('switch-text').textContent=text;
+  el.style.display='block';
+  if(switchNoticeTmr) clearTimeout(switchNoticeTmr);
+  switchNoticeTmr=setTimeout(()=>{ el.style.display='none'; },2600);
+}
+
+// ─── CLOCK ───
+setInterval(()=>{
+  const now=new Date();
+  document.getElementById('clock-display').textContent=fmtTime(now);
+  document.getElementById('speedo-clock').textContent=fmtTime(now);
+},1000);
+
+// ─── BT NOISE ───
+setInterval(()=>{
+  latency=Math.max(18,Math.min(80,latency+(Math.random()-0.5)*8));
+  signal=Math.max(40,Math.min(99,signal+(Math.random()-0.5)*4));
+},500);
+
+// ─── MAIN SIMULATION LOOP ───
+const LOW_THRESHOLD=20;
+let lastTime=performance.now();
+let prevActive=tel.active;
+
+function tick(now){
+  const dt=Math.min(0.05,(now-lastTime)/1000);
+  lastTime=now;
+
+  // Physics
+  const maxAccel=55, maxBrake=110;
+  const drag=4+tel.speed*0.04;
+  let accel=0;
+  if(gear==='D') accel=(throttle/100)*maxAccel;
+  else if(gear==='R') accel=(throttle/100)*(maxAccel*0.35);
+  const brakeDecel=(brake/100)*maxBrake;
+  let speed=tel.speed+accel*dt-brakeDecel*dt-drag*dt;
+  if(gear==='P') speed-=30*dt;
+  speed=Math.max(0,Math.min(220,speed));
+
+  let heading=(tel.heading+(steer/180)*(speed/30)*dt*60)%360;
+  if(heading<0) heading+=360;
+
+  // Solar/wind
+  const connected=btStatus==='connected';
+  const sunHour=new Date().getHours();
+  const sunlight=sunHour>=6&&sunHour<=19;
+  const solar=connected&&sunlight;
+  const wind=connected&&(speed>18||Math.sin(now/2000)>0.4);
+  const solarW=solar?180+Math.round((Math.sin(now/800)+1)*50):0;
+  const windW=wind?Math.round(40+(speed>20?(speed-20)*4:20)):0;
+
+  // Battery active selection
+  let active=tel.active;
+  if(batMode==='A') active='A';
+  else if(batMode==='B') active='B';
+  else {
+    const cur=tel.active==='A'?tel.batA:tel.batB;
+    const other=tel.active==='A'?tel.batB:tel.batA;
+    if(cur<LOW_THRESHOLD&&other>cur+5) active=tel.active==='A'?'B':'A';
+  }
+
+  // Drain/charge
+  let batA=tel.batA, batB=tel.batB;
+  const loadKw=(speed*0.00012+throttle*0.00006+0.00002)*60*dt;
+  if(active==='A') batA=Math.max(0,batA-loadKw);
+  else batB=Math.max(0,batB-loadKw);
+  const totalW=solarW+windW;
+  const chargeRate=(totalW/1000)*60*dt*0.15;
+  if(totalW>0){
+    if(active==='A') batB=Math.min(100,batB+chargeRate);
+    else batA=Math.min(100,batA+chargeRate);
+  }
+
+  const voltA=42+(batA/100)*8;
+  const voltB=42+(batB/100)*8;
+  const distance=tel.distance+(speed/3600)*dt;
+  const driveMinutes=tel.driveMinutes+(speed>1?dt/60:0);
+
+  Object.assign(tel,{speed,heading,batA,batB,voltA,voltB,solar,wind,solarW,windW,distance,driveMinutes,active});
+
+  if(prevActive!==active){
+    showSwitch(`SWITCHING POWER SOURCE → BATTERY ${active}`);
+    prevActive=active;
+  }
+
+  render();
+  requestAnimationFrame(tick);
+}
+
+// ─── RENDER ───
+function render(){
+  const {speed,batA,batB,voltA,voltB,solar,wind,solarW,windW,active,distance,driveMinutes}=tel;
+  const totalW=(solar?solarW:0)+(wind?windW:0);
+  const chargingId=totalW>0?(active==='A'?'B':'A'):null;
+  const status=gear==='P'?'PARKED':speed>1?'DRIVING':'STOPPED';
+
+  // Top bar
+  document.getElementById('status-display').textContent=status;
+
+  // Speedometer needle
+  const max=220,W=800,H=520,cx=400,cy=H*0.78;
+  const sa=180,sweep=180;
+  const pct=Math.max(0,Math.min(1,speed/max));
+  const angle=sa+sweep*pct;
+  document.getElementById('speedo-needle').style.transform=`rotate(${angle-270}deg)`;
+  document.getElementById('speedo-speed-text').textContent=Math.round(speed);
+  document.getElementById('speedo-dist').textContent=distance.toFixed(1);
+  document.getElementById('speedo-min').textContent=Math.floor(driveMinutes)+':00';
+
+  // Battery A
+  const colorA=batA>50?'#7df3ff':batA>20?'#ffb84d':'#ff4d4d';
+  const stateA=active==='A'?'DRIVING':chargingId==='A'?'CHARGING':'STANDBY';
+  document.getElementById('batA-bar').style.width=Math.max(0,Math.min(100,batA))+'%';
+  document.getElementById('batA-bar').style.background=`linear-gradient(90deg,${colorA},#5060ff)`;
+  document.getElementById('batA-bar').style.boxShadow=`0 0 12px ${colorA}`;
+  document.getElementById('batA-pct').textContent=Math.round(batA)+'%';
+  document.getElementById('batA-volt').textContent=voltA.toFixed(1)+'V';
+  setBatState('A',stateA,chargingId==='A'?totalW:0,solar,wind,colorA);
+
+  // Battery B
+  const colorB=batB>50?'#7df3ff':batB>20?'#ffb84d':'#ff4d4d';
+  const stateB=active==='B'?'DRIVING':chargingId==='B'?'CHARGING':'STANDBY';
+  document.getElementById('batB-bar').style.width=Math.max(0,Math.min(100,batB))+'%';
+  document.getElementById('batB-bar').style.background=`linear-gradient(90deg,${colorB},#5060ff)`;
+  document.getElementById('batB-bar').style.boxShadow=`0 0 12px ${colorB}`;
+  document.getElementById('batB-pct').textContent=Math.round(batB)+'%';
+  document.getElementById('batB-volt').textContent=voltB.toFixed(1)+'V';
+  setBatState('B',stateB,chargingId==='B'?totalW:0,solar,wind,colorB);
+
+  // Power mgmt flow
+  document.getElementById('pm-batA-pct').textContent=Math.round(batA)+'%';
+  document.getElementById('pm-batB-pct').textContent=Math.round(batB)+'%';
+  document.getElementById('pm-batA-label').style.color=active==='A'?'#7df3ff':chargingId==='A'?'#4dffa0':'rgba(255,255,255,0.4)';
+  document.getElementById('pm-batB-label').style.color=active==='B'?'#7df3ff':chargingId==='B'?'#4dffa0':'rgba(255,255,255,0.4)';
+
+  // Arrows
+  const leftArrow=document.getElementById('pm-arrow-left');
+  const rightArrow=document.getElementById('pm-arrow-right');
+  leftArrow.innerHTML=active==='A'?'<span class="flow-anim" style="color:#7df3ff;font-size:14px">→→</span>':(chargingId==='A'?'<span class="flow-anim" style="color:#4dffa0;font-size:14px">←←</span>':'');
+  rightArrow.innerHTML=active==='B'?'<span class="flow-anim" style="color:#7df3ff;font-size:14px">←←</span>':(chargingId==='B'?'<span class="flow-anim" style="color:#4dffa0;font-size:14px">→→</span>':'');
+
+  // Solar/Wind
+  document.getElementById('solar-icon').style.color=solar?'#ffd54a':'rgba(255,255,255,0.3)';
+  document.getElementById('solar-val').style.color=solar?'#ffd54a':'rgba(255,255,255,0.4)';
+  document.getElementById('solar-val').textContent=solar?`YES · ${solarW}W`:'NO';
+  document.getElementById('wind-icon').style.color=wind?'#7df3ff':'rgba(255,255,255,0.3)';
+  document.getElementById('wind-val').style.color=wind?'#7df3ff':'rgba(255,255,255,0.4)';
+  document.getElementById('wind-val').textContent=wind?`YES · ${windW}W`:'NO';
+}
+
+function setBatState(id, state, chargingW, solar, wind, color){
+  const isDriving=state==='DRIVING', isCharging=state==='CHARGING';
+  const cell=document.getElementById('bat'+id+'-cell');
+  const stateEl=document.getElementById('bat'+id+'-state');
+  const chgEl=document.getElementById('bat'+id+'-chg');
+  const srcEl=document.getElementById('bat'+id+'-src');
+  const iconEl=document.getElementById('bat'+id+'-icon');
+
+  // ring glow
+  cell.style.boxShadow=isDriving?'0 0 0 1px rgba(125,243,255,0.6),0 0 22px rgba(125,243,255,0.45)':
+    isCharging?'0 0 0 1px rgba(77,255,160,0.55),0 0 22px rgba(77,255,160,0.35)':'none';
+
+  stateEl.style.background=isDriving?'rgba(125,243,255,0.18)':isCharging?'rgba(77,255,160,0.18)':'rgba(255,255,255,0.06)';
+  stateEl.style.color=isDriving?'#7df3ff':isCharging?'#4dffa0':'rgba(255,255,255,0.55)';
+  stateEl.textContent=isDriving?'POWERING':state;
+
+  iconEl.setAttribute('stroke',isCharging?'#4dffa0':color);
+  if(isCharging){
+    iconEl.innerHTML='<rect x="2" y="7" width="16" height="11" rx="2"/><path d="M22 11v3"/><path d="M11 7V3l-5 5h4l-4 8h4l-2 4"/>';
+  } else {
+    iconEl.innerHTML='<rect x="2" y="7" width="16" height="11" rx="2"/><path d="M22 11v3"/>';
+  }
+
+  if(isCharging&&chargingW>0){
+    chgEl.style.display='flex';
+    chgEl.textContent='⚡'+Math.round(chargingW)+'W';
+  } else { chgEl.style.display='none'; }
+
+  if(isCharging){
+    srcEl.innerHTML=(solar?'<span style="color:#ffd54a">☀</span>':'')+(wind?'<span style="color:#7df3ff">💨</span>':(!solar&&!wind?'<span style="opacity:.5">—</span>':''));
+  } else { srcEl.innerHTML='<span style="opacity:.5">—</span>'; }
+}
+
+// ─── BOOT + START ───
+setTimeout(()=>{
+  document.getElementById('boot-screen').style.display='none';
+  document.getElementById('cockpit').style.display='flex';
+  updateGearBtns();
+  setBatMode('AUTO');
+  requestAnimationFrame(tick);
+},1400);
+</script>
+</body>
+</html>
